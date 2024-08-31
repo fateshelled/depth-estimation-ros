@@ -1,0 +1,6 @@
+#pragma once
+
+#cmakedefine ENABLE_OPENVINO
+#cmakedefine ENABLE_TENSORRT
+#cmakedefine ENABLE_ONNXRUNTIME
+#cmakedefine ENABLE_TFLITE
