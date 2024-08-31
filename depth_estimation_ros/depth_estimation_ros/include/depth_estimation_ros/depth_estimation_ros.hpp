@@ -34,12 +34,12 @@ namespace depth_estimation_ros{
 
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_depth_image_;
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_colored_depth_image_;
-        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pcl2_;
+        // rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pcl2_;
 
         const std::string window_name_ = "depth_estimation_ros";
         bool imshow_ = true;
-        bool publish_point_cloud2_ = true;
         bool publish_depth_image_ = true;
         bool publish_colored_depth_image_ = true;
+        // bool publish_point_cloud2_ = false;
     };
 }

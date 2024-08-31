@@ -18,12 +18,12 @@ namespace depth_estimation_ros
         const auto backend = this->declare_parameter("backend", "tensorrt");
         const auto tensorrt_device = this->declare_parameter("tensorrt_device", 0);
 
-        const auto input_mean = this->declare_parameter("model.input.mean",
+        const auto input_mean = this->declare_parameter("model_input_mean",
             std::vector<double>{0.485, 0.456, 0.406});
-        const auto input_std = this->declare_parameter("model.input.std",
+        const auto input_std = this->declare_parameter("model_input_std",
             std::vector<double>{0.229, 0.224, 0.225});
 
-        this->publish_point_cloud2_ = this->declare_parameter("publish_point_cloud2", true);
+        // this->publish_point_cloud2_ = this->declare_parameter("publish_point_cloud2", false);
         this->publish_depth_image_ = this->declare_parameter("publish_depth_image", true);
         this->publish_colored_depth_image_ = this->declare_parameter("publish_colored_depth_image", true);
         this->imshow_ = this->declare_parameter("imshow", true);
@@ -50,11 +50,6 @@ namespace depth_estimation_ros
                 rclcpp::shutdown();
             }
             else if (backend == "onnxruntime")
-            {
-                RCLCPP_ERROR(this->get_logger(), "not support openvino yet.");
-                rclcpp::shutdown();
-            }
-            else if (backend == "tflite")
             {
                 RCLCPP_ERROR(this->get_logger(), "not support openvino yet.");
                 rclcpp::shutdown();
@@ -97,12 +92,12 @@ namespace depth_estimation_ros
             this->pub_colored_depth_image_ = this->create_publisher<sensor_msgs::msg::Image>(
                 "depth_estimation_ros/color/image_raw", 10);
         }
-        if (this->publish_point_cloud2_)
-        {
-            RCLCPP_WARN(this->get_logger(), "not support publish point_cloud2 yet.");
-            // this->pub_pcl2_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-            //     "depth_estimation_ros/point_cloud2", rclcpp::SensorDataQoS());
-        }
+        // if (this->publish_point_cloud2_)
+        // {
+        //     RCLCPP_WARN(this->get_logger(), "not support publish point_cloud2 yet.");
+        //     // this->pub_pcl2_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+        //     //     "depth_estimation_ros/point_cloud2", rclcpp::SensorDataQoS());
+        // }
 
         if (this->imshow_)
         {

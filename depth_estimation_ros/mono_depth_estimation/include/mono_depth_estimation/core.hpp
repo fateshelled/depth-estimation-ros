@@ -84,25 +84,5 @@ namespace depth_estimation_ros
                 }
             }
         }
-
-        // for NHWC
-        void blobFromImage_nhwc(const cv::Mat &img, float *blob_data, bool normalize=true)
-        {
-            const size_t channels = 3;
-            cv::Mat img_f32;
-            img.convertTo(img_f32, CV_32FC3);
-            if (normalize)
-            {
-                std::vector<cv::Mat> img_f32_split(3);
-                cv::split(img_f32, img_f32_split);
-                for (size_t i = 0; i < channels; ++i)
-                {
-                    img_f32_split[i] *= this->std255_inv_[i];
-                    img_f32_split[i] += this->mean_std_[i];
-                }
-                cv::merge(img_f32_split, img_f32);
-            }
-            memcpy(blob_data, img_f32.data, img.rows * img.cols * channels * sizeof(float));
-        }
     };
 }
