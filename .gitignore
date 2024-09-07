@@ -32,3 +32,5 @@
 *.app
 
 .vscode/*
+*.onnx
+*.engine
