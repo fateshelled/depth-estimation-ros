@@ -45,9 +45,11 @@ namespace depth_estimation_ros
             return output;
         }
 
-        cv::Mat postprocess(float* out_blob, const cv::Size output_size)
+        cv::Mat postprocess(float* out_blob, const cv::Size output_size, int disparity_channel=0)
         {
-            cv::Mat output(this->input_h_, this->input_w_, CV_32FC1, out_blob);
+            cv::Mat output(
+                this->input_h_, this->input_w_, CV_32FC1,
+                out_blob + this->output_h_ * this->output_w_ * disparity_channel);
             cv::resize(output, output, output_size, 0.0, 0.0, cv::INTER_LINEAR);
             return output;
         }

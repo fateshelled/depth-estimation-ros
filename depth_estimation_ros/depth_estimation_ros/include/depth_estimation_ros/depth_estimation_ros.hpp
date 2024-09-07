@@ -14,6 +14,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <stereo_msgs/msg/disparity_image.hpp>
 #include <std_msgs/msg/header.hpp>
 
 #include <message_filters/subscriber.h>
@@ -75,7 +76,13 @@ namespace depth_estimation_ros{
 
         bool imshow_ = true;
         bool publish_depth_image_ = true;
+        bool publish_disparity_image_ = true;
         bool publish_colored_depth_image_ = true;
+
+        double baseline_meter_ = 0.050; // D435: 50mm
+        double depth_scale_ = 0.001;
+        double max_depth_meter_ = 20.0;
+
         // bool publish_point_cloud2_ = false;
     };
 }

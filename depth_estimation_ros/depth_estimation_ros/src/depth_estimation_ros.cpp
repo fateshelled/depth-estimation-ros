@@ -25,6 +25,10 @@ namespace depth_estimation_ros
         const auto input_std = this->declare_parameter("model_input_std",
             std::vector<double>{0.229, 0.224, 0.225});
 
+        this->baseline_meter_ = this->declare_parameter("stereo_baseline_meter", 0.05);
+        this->depth_scale_ = this->declare_parameter("depth_scale", 0.001);
+        this->max_depth_meter_ = this->declare_parameter("max_depth_meter", 20.0);
+
         // this->publish_point_cloud2_ = this->declare_parameter("publish_point_cloud2", false);
         this->publish_depth_image_ = this->declare_parameter("publish_depth_image", true);
         this->publish_colored_depth_image_ = this->declare_parameter("publish_colored_depth_image", true);
@@ -202,14 +206,63 @@ namespace depth_estimation_ros
         }
     }
 
-
     void DepthEstimationNode::stereo_image_callback(
             const sensor_msgs::msg::Image::SharedPtr left_ptr,
             const sensor_msgs::msg::CameraInfo::SharedPtr left_info_ptr,
             const sensor_msgs::msg::Image::SharedPtr right_ptr,
             const sensor_msgs::msg::CameraInfo::SharedPtr right_info_ptr)
     {
-        RCLCPP_INFO(this->get_logger(), "subscribe.");
+        cv::Mat left = cv_bridge::toCvCopy(*left_ptr, "bgr8")->image;
+        cv::Mat right = cv_bridge::toCvCopy(*right_ptr, "bgr8")->image;
+
+        auto now = std::chrono::system_clock::now();
+        auto disparity_map = this->stereo_depth_->inference(left, right);
+        auto end = std::chrono::system_clock::now();
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - now);
+        RCLCPP_INFO(this->get_logger(), "Inference time: %5ld us", elapsed.count());
+
+        auto fx = left_info_ptr->p[0];
+        auto depth_f32 = (fx * this->baseline_meter_) / disparity_map;
+        // TODO
+        //  clip with this->max_depth_meter_
+
+        if (this->publish_depth_image_)
+        {
+            cv::Mat depth_u16;
+            cv::normalize(
+                depth_f32 / this->depth_scale_, depth_u16,
+                0, std::numeric_limits<uint16_t>::max(), cv::NORM_MINMAX, CV_16U);
+            sensor_msgs::msg::Image::SharedPtr pub_img =
+                cv_bridge::CvImage(left_ptr->header, "mono16", depth_u16).toImageMsg();
+            this->pub_depth_image_->publish(*pub_img);
+        }
+
+        if (this->publish_colored_depth_image_ || this->imshow_)
+        {
+            cv::Mat colored;
+            cv::normalize(
+                depth_f32, colored,
+                0, std::numeric_limits<uint8_t>::max(), cv::NORM_MINMAX, CV_8U);
+            cv::applyColorMap(colored, colored, cv::COLORMAP_JET);
+
+            if (this->publish_colored_depth_image_)
+            {
+                sensor_msgs::msg::Image::SharedPtr pub_img =
+                    cv_bridge::CvImage(left_ptr->header, "bgr8", colored).toImageMsg();
+                this->pub_colored_depth_image_->publish(*pub_img);
+            }
+            if (this->imshow_)
+            {
+                cv::imshow(window_name_, colored);
+                auto key = cv::waitKey(1);
+                if (key == 27)
+                {
+                    rclcpp::shutdown();
+                }
+            }
+        }
+        cv::imwrite("output.png", depth_map);
     }
 }
 

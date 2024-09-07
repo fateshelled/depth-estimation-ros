@@ -16,6 +16,7 @@
   <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>stereo_msgs</depend>
   <depend>message_filters</depend>
   <depend>mono_depth_estimation</depend>
   <depend>stereo_depth_estimation</depend>
