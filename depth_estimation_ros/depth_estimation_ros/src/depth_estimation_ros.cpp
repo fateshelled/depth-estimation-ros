@@ -262,7 +262,6 @@ namespace depth_estimation_ros
                 }
             }
         }
-        cv::imwrite("output.png", depth_map);
     }
 }
 
