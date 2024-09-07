@@ -7,8 +7,8 @@ namespace depth_estimation_ros
     class AbcMonoDepthEstimation
     {
     public:
-        AbcMonoDepthEstimation(const std::vector<double>& mean, const std::vector<double>& std)
-        : mean_(mean), std_(std)
+        AbcMonoDepthEstimation(bool input_normalize, const std::vector<double>& mean, const std::vector<double>& std, bool swap_r_b)
+        : input_normalize_(input_normalize), mean_(mean), std_(std), swap_r_b_(swap_r_b)
         {
             if (mean.size() != 3 || std.size() != 3)
             {
@@ -30,12 +30,14 @@ namespace depth_estimation_ros
         int input_h_;
         int output_w_;
         int output_h_;
+        bool input_normalize_;
         std::vector<double> mean_ = {0.485, 0.456, 0.406};
         std::vector<double> std_ = {0.229, 0.224, 0.225};
         std::vector<float> std255_inv_ = {
             1.0 / (255.0 * 0.229), 1.0 / (255.0 * 0.224), 1.0 / (255.0 * 0.225)};
         std::vector<float> mean_std_ = {
             -0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225};
+        bool swap_r_b_;
 
         cv::Mat preprocess(const cv::Mat &img)
         {

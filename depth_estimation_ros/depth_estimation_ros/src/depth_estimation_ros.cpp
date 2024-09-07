@@ -20,14 +20,18 @@ namespace depth_estimation_ros
         const auto backend = this->declare_parameter("backend", "tensorrt");
         const auto tensorrt_device = this->declare_parameter("tensorrt_device", 0);
 
+        const auto input_normalize = this->declare_parameter("model_input_normalize", true);
         const auto input_mean = this->declare_parameter("model_input_mean",
             std::vector<double>{0.485, 0.456, 0.406});
         const auto input_std = this->declare_parameter("model_input_std",
             std::vector<double>{0.229, 0.224, 0.225});
+        const auto swap_r_b = this->declare_parameter("model_swap_r_b", false);
 
         this->baseline_meter_ = this->declare_parameter("stereo_baseline_meter", 0.05);
         this->depth_scale_ = this->declare_parameter("depth_scale", 0.001);
+        this->depth_offset_ = this->declare_parameter("depth_offset", 0.0);
         this->max_depth_meter_ = this->declare_parameter("max_depth_meter", 20.0);
+        this->min_depth_meter_ = this->declare_parameter("min_depth_meter", 0.0);
 
         // this->publish_point_cloud2_ = this->declare_parameter("publish_point_cloud2", false);
         this->publish_depth_image_ = this->declare_parameter("publish_depth_image", true);
@@ -43,7 +47,9 @@ namespace depth_estimation_ros
                 RCLCPP_INFO(this->get_logger(), "Model Type is TensorRT");
                 this->mono_depth_ = std::make_unique<MonoDepthEstimationTensorRT>(
                     model_path,
+                    input_normalize,
                     input_mean, input_std,
+                    swap_r_b,
                     tensorrt_device);
 #else
                 RCLCPP_ERROR(this->get_logger(), "depth_estimation is not built with TensorRT");
@@ -75,7 +81,9 @@ namespace depth_estimation_ros
                 RCLCPP_INFO(this->get_logger(), "Model Type is TensorRT");
                 this->stereo_depth_ = std::make_unique<StereoDepthEstimationTensorRT>(
                     model_path,
+                    input_normalize,
                     input_mean, input_std,
+                    swap_r_b,
                     tensorrt_device);
 #else
                 RCLCPP_ERROR(this->get_logger(), "depth_estimation is not built with TensorRT");
@@ -210,7 +218,7 @@ namespace depth_estimation_ros
             const sensor_msgs::msg::Image::SharedPtr left_ptr,
             const sensor_msgs::msg::CameraInfo::SharedPtr left_info_ptr,
             const sensor_msgs::msg::Image::SharedPtr right_ptr,
-            const sensor_msgs::msg::CameraInfo::SharedPtr right_info_ptr)
+            const sensor_msgs::msg::CameraInfo::SharedPtr)
     {
         cv::Mat left = cv_bridge::toCvCopy(*left_ptr, "bgr8")->image;
         cv::Mat right = cv_bridge::toCvCopy(*right_ptr, "bgr8")->image;
@@ -223,9 +231,11 @@ namespace depth_estimation_ros
         RCLCPP_INFO(this->get_logger(), "Inference time: %5ld us", elapsed.count());
 
         auto fx = left_info_ptr->p[0];
-        auto depth_f32 = (fx * this->baseline_meter_) / disparity_map;
-        // TODO
-        //  clip with this->max_depth_meter_
+        cv::Mat depth_f32 = (fx * this->baseline_meter_) / disparity_map + this->depth_offset_;
+
+        // remove out of range
+        depth_f32.setTo(0.0, depth_f32 < this->min_depth_meter_);
+        depth_f32.setTo(0.0, depth_f32 > this->max_depth_meter_);
 
         if (this->publish_depth_image_)
         {

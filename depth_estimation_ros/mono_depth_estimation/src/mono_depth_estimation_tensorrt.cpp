@@ -5,9 +5,11 @@ namespace depth_estimation_ros
 
     MonoDepthEstimationTensorRT::MonoDepthEstimationTensorRT(
         const std::string &path_to_engine,
+        bool input_normalize,
         const std::vector<double>& mean, const std::vector<double>& std,
+        bool swap_r_b,
         int device)
-        : AbcMonoDepthEstimation(mean, std),
+        : AbcMonoDepthEstimation(input_normalize, mean, std, swap_r_b),
           DEVICE_(device)
     {
         cudaSetDevice(this->DEVICE_);

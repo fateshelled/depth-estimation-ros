@@ -33,7 +33,9 @@ namespace depth_estimation_ros{
         public:
             MonoDepthEstimationTensorRT(
                 const std::string &path_to_engine,
+                bool input_normalize,
                 const std::vector<double>& mean, const std::vector<double>& std,
+                bool swap_r_b,
                 int device=0);
             ~MonoDepthEstimationTensorRT();
             cv::Mat inference(const cv::Mat& frame) override;

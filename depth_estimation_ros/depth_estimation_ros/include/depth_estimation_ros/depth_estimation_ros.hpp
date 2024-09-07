@@ -81,7 +81,9 @@ namespace depth_estimation_ros{
 
         double baseline_meter_ = 0.050; // D435: 50mm
         double depth_scale_ = 0.001;
+        double depth_offset_ = 0.0;
         double max_depth_meter_ = 20.0;
+        double min_depth_meter_ = 0.0;
 
         // bool publish_point_cloud2_ = false;
     };

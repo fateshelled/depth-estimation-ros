@@ -5,9 +5,11 @@ namespace depth_estimation_ros
 
     StereoDepthEstimationTensorRT::StereoDepthEstimationTensorRT(
         const std::string &path_to_engine,
+        bool input_normalize,
         const std::vector<double>& mean, const std::vector<double>& std,
+        bool swap_r_b,
         int device)
-        : AbcStereoDepthEstimation(mean, std),
+        : AbcStereoDepthEstimation(input_normalize, mean, std, swap_r_b),
           DEVICE_(device)
     {
         cudaSetDevice(this->DEVICE_);
