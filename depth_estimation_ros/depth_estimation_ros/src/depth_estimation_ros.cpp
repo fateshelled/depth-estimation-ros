@@ -13,8 +13,10 @@ namespace depth_estimation_ros
 
         const auto model_path = this->declare_parameter(
             "model_path",
-            "src/depth-estimation-ros/depth_anything_v2_vits.sim.fp16.engine");
-        const auto model_type = this->declare_parameter("model_type", "mono");
+            // "src/depth-estimation-ros/depth_anything_v2_vits.sim.fp16.engine"
+            "src/depth-estimation-ros/crestereo_init_iter2_360x640.fp16.engine"
+        );
+        const auto model_type = this->declare_parameter("model_type", "stereo");
         const auto backend = this->declare_parameter("backend", "tensorrt");
         const auto tensorrt_device = this->declare_parameter("tensorrt_device", 0);
 
@@ -61,6 +63,23 @@ namespace depth_estimation_ros
             }
             RCLCPP_INFO(this->get_logger(), "model loaded");
         }
+        else
+        {
+            if (backend == "tensorrt")
+            {
+#ifdef ENABLE_TENSORRT
+                RCLCPP_INFO(this->get_logger(), "Model Type is TensorRT");
+                this->stereo_depth_ = std::make_unique<StereoDepthEstimationTensorRT>(
+                    model_path,
+                    input_mean, input_std,
+                    tensorrt_device);
+#else
+                RCLCPP_ERROR(this->get_logger(), "depth_estimation is not built with TensorRT");
+                rclcpp::shutdown();
+#endif
+            }
+
+        }
 
 
         if (model_type == "mono")
@@ -73,8 +92,35 @@ namespace depth_estimation_ros
         }
         else if (model_type == "stereo")
         {
-            RCLCPP_ERROR(this->get_logger(), "not support stereo model yet.");
-            rclcpp::shutdown();
+            auto queue_size = this->declare_parameter("message_filter.queue_size", 5);
+            auto approximate_sync = this->declare_parameter("message_filter.approximate_sync", false);
+            auto approximate_sync_tol = this->declare_parameter("message_filter.approximate_sync_tolerance_seconds", 0.0);
+
+            sub_left_image_.subscribe(this, "/camera/camera/infra1/image_rect_raw");
+            sub_right_image_.subscribe(this, "/camera/camera/infra2/image_rect_raw");
+            sub_left_info_.subscribe(this, "/camera/camera/infra2/camera_info");
+            sub_right_info_.subscribe(this, "/camera/camera/infra2/camera_info");
+
+            // Synchronize callbacks
+            if (approximate_sync) {
+                if (approximate_sync_tol == 0.0) {
+                    approximate_sync_.reset(
+                        new ApproximateSync(
+                            ApproximatePolicy(queue_size),
+                            sub_left_image_, sub_left_info_, sub_right_image_, sub_right_info_));
+                    approximate_sync_->registerCallback(&DepthEstimationNode::stereo_image_callback, this);
+                } else {
+                    approximate_epsilon_sync_.reset(
+                        new ApproximateEpsilonSync(
+                            ApproximateEpsilonPolicy(queue_size, rclcpp::Duration::from_seconds(approximate_sync_tol)),
+                            sub_left_image_, sub_left_info_, sub_right_image_, sub_right_info_));
+                    approximate_epsilon_sync_->registerCallback(&DepthEstimationNode::stereo_image_callback, this);
+                }
+            } else {
+                exact_sync_.reset(
+                    new ExactSync(ExactPolicy(queue_size), sub_left_image_, sub_left_info_, sub_right_image_, sub_right_info_));
+                exact_sync_->registerCallback(&DepthEstimationNode::stereo_image_callback, this);
+            }
         }
         else
         {
@@ -156,6 +202,15 @@ namespace depth_estimation_ros
         }
     }
 
+
+    void DepthEstimationNode::stereo_image_callback(
+            const sensor_msgs::msg::Image::SharedPtr left_ptr,
+            const sensor_msgs::msg::CameraInfo::SharedPtr left_info_ptr,
+            const sensor_msgs::msg::Image::SharedPtr right_ptr,
+            const sensor_msgs::msg::CameraInfo::SharedPtr right_info_ptr)
+    {
+        RCLCPP_INFO(this->get_logger(), "subscribe.");
+    }
 }
 
 RCLCPP_COMPONENTS_REGISTER_NODE(depth_estimation_ros::DepthEstimationNode)
