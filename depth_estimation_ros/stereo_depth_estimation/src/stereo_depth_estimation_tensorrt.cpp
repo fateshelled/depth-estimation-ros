@@ -65,15 +65,30 @@ namespace depth_estimation_ros
 
         const auto output_name = this->engine_->getIOTensorName(this->outputIndex_);
         auto output_dims = this->engine_->getTensorShape(output_name);
-        assert(output_dims.nbDims == 4);
-        this->output_c_ = output_dims.d[1];
-        this->output_h_ = output_dims.d[2];
-        this->output_w_ = output_dims.d[3];
+        if (output_dims.nbDims == 3)
+        {
+            this->output_c_ = 1;
+            this->output_h_ = output_dims.d[1];
+            this->output_w_ = output_dims.d[2];
+        }
+        else if (output_dims.nbDims == 4)
+        {
+            this->output_c_ = output_dims.d[1];
+            this->output_h_ = output_dims.d[2];
+            this->output_w_ = output_dims.d[3];
+        }
+        else
+        {
+            std::string msg = "invalid output_dims.nbDims: ";
+            msg += std::to_string(output_dims.nbDims);
+            throw std::runtime_error(msg.c_str());
+        }
         this->output_size_ = 1;
         for (int j = 0; j < output_dims.nbDims; ++j)
         {
             this->output_size_ *= output_dims.d[j];
         }
+        std::cout << "OUTPUT_CHANNELS: " << this->output_c_ << std::endl;
         std::cout << "OUTPUT_HEIGHT: " << this->output_h_ << std::endl;
         std::cout << "OUTPUT_WIDTH:  " << this->output_w_ << std::endl;
 
