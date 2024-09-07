@@ -40,7 +40,6 @@ namespace depth_estimation_ros
 
         if (model_type == "mono")
         {
-
             if (backend == "tensorrt")
             {
 #ifdef ENABLE_TENSORRT
@@ -55,16 +54,6 @@ namespace depth_estimation_ros
                 RCLCPP_ERROR(this->get_logger(), "depth_estimation is not built with TensorRT");
                 rclcpp::shutdown();
 #endif
-            }
-            else if (backend == "openvino")
-            {
-                RCLCPP_ERROR(this->get_logger(), "not support openvino yet.");
-                rclcpp::shutdown();
-            }
-            else if (backend == "onnxruntime")
-            {
-                RCLCPP_ERROR(this->get_logger(), "not support openvino yet.");
-                rclcpp::shutdown();
             }
             else
             {
