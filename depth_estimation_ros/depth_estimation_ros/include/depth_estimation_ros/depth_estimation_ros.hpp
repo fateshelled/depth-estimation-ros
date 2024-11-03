@@ -70,7 +70,7 @@ namespace depth_estimation_ros{
 
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_depth_image_;
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_colored_depth_image_;
-        // rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pcl2_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pcl2_;
 
         const std::string window_name_ = "depth_estimation_ros";
 
@@ -78,6 +78,7 @@ namespace depth_estimation_ros{
         bool publish_depth_image_ = true;
         bool publish_disparity_image_ = true;
         bool publish_colored_depth_image_ = true;
+        bool publish_point_cloud2_ = true;
 
         double baseline_meter_ = 0.050; // D435: 50mm
         double depth_scale_ = 0.001;
@@ -85,6 +86,5 @@ namespace depth_estimation_ros{
         double max_depth_meter_ = 20.0;
         double min_depth_meter_ = 0.0;
 
-        // bool publish_point_cloud2_ = false;
     };
 }

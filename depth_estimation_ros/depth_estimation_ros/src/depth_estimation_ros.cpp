@@ -1,4 +1,5 @@
 #include "depth_estimation_ros/depth_estimation_ros.hpp"
+#include "depth_estimation_ros/depth_image_to_pc_msg.hpp"
 
 namespace depth_estimation_ros
 {
@@ -28,15 +29,15 @@ namespace depth_estimation_ros
         const auto swap_r_b = this->declare_parameter("model_swap_r_b", false);
 
         this->baseline_meter_ = this->declare_parameter("stereo_baseline_meter", 0.05);
-        this->depth_scale_ = this->declare_parameter("depth_scale", 0.001);
+        this->depth_scale_ = this->declare_parameter("depth_scale", 0.5);
         this->depth_offset_ = this->declare_parameter("depth_offset", 0.0);
         this->max_depth_meter_ = this->declare_parameter("max_depth_meter", 20.0);
         this->min_depth_meter_ = this->declare_parameter("min_depth_meter", 0.0);
 
-        // this->publish_point_cloud2_ = this->declare_parameter("publish_point_cloud2", false);
-        this->publish_depth_image_ = this->declare_parameter("publish_depth_image", true);
+        this->publish_point_cloud2_ = this->declare_parameter("publish_point_cloud2", true);
+        this->publish_depth_image_ = this->declare_parameter("publish_depth_image", false);
         this->publish_colored_depth_image_ = this->declare_parameter("publish_colored_depth_image", true);
-        this->imshow_ = this->declare_parameter("imshow", true);
+        this->imshow_ = this->declare_parameter("imshow", false);
 
         if (model_type == "mono")
         {
@@ -81,7 +82,6 @@ namespace depth_estimation_ros
             }
 
         }
-
 
         if (model_type == "mono")
         {
@@ -139,12 +139,11 @@ namespace depth_estimation_ros
             this->pub_colored_depth_image_ = this->create_publisher<sensor_msgs::msg::Image>(
                 "depth_estimation_ros/color/image_raw", 10);
         }
-        // if (this->publish_point_cloud2_)
-        // {
-        //     RCLCPP_WARN(this->get_logger(), "not support publish point_cloud2 yet.");
-        //     // this->pub_pcl2_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-        //     //     "depth_estimation_ros/point_cloud2", rclcpp::SensorDataQoS());
-        // }
+        if (this->publish_point_cloud2_)
+        {
+            this->pub_pcl2_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+                "depth_estimation_ros/points", 10);
+        }
 
         if (this->imshow_)
         {
@@ -235,6 +234,17 @@ namespace depth_estimation_ros
             sensor_msgs::msg::Image::SharedPtr pub_img =
                 cv_bridge::CvImage(left_ptr->header, "mono16", depth_u16).toImageMsg();
             this->pub_depth_image_->publish(*pub_img);
+        }
+
+        if (this->publish_point_cloud2_)
+        {
+            const float fx = left_info_ptr->p[0];
+            const float fy = left_info_ptr->p[5];
+            const float cx = left_info_ptr->p[2];
+            const float cy = left_info_ptr->p[6];
+
+            auto pub_pcd = depth_image_to_pc_msg<float>(depth_f32, left_ptr->header, fx, fy, cx, cy, this->depth_scale_);
+            this->pub_pcl2_->publish(*pub_pcd);
         }
 
         if (this->publish_colored_depth_image_ || this->imshow_)

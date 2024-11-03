@@ -14,11 +14,8 @@ endif()
 find_package(ament_cmake_auto REQUIRED)
 ament_auto_find_build_dependencies()
 
-option(DEPTH_ESTIMATION_ROS_USE_OPENVINO    "Use OpenVINO"  OFF)
-option(DEPTH_ESTIMATION_ROS_USE_TENSORRT    "Use TensorRT"  OFF)
-option(DEPTH_ESTIMATION_ROS_USE_ONNXRUNTIME "Use ONNXRuntime"  OFF)
-option(DEPTH_ESTIMATION_ROS_USE_TFLITE      "Use tflite"  OFF)
-option(JETSON                               "Use Jetson"  OFF)
+option(DEPTH_ESTIMATION_ROS_USE_TENSORRT "Use TensorRT" ON)
+option(JETSON                            "Use Jetson"   OFF)
 
 if(JETSON)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/usr/include/aarch64-linux-gnu/ -L/usr/lib/aarch64-linux-gnu/")
