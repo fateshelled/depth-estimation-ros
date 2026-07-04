@@ -40,7 +40,7 @@ if(DEPTH_ESTIMATION_ROS_USE_TENSORRT)
 
   set(ENABLE_TENSORRT ON)
   set(TARGET_SRC ${TARGET_SRC} src/mono_depth_estimation_tensorrt.cpp)
-  set(TARGET_LIBS ${TARGET_LIBS} nvinfer nvinfer_plugin)
+  set(TARGET_LIBS ${TARGET_LIBS} nvinfer)
   set(TARGET_DPENDENCIES ${TARGET_DPENDENCIES} CUDA)
 endif()
 
