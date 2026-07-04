@@ -14,6 +14,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/image_encodings.hpp>
 #include <stereo_msgs/msg/disparity_image.hpp>
 #include <std_msgs/msg/header.hpp>
 
@@ -25,6 +26,7 @@
 
 #include "mono_depth_estimation/mono_depth_estimation.hpp"
 #include "stereo_depth_estimation/stereo_depth_estimation.hpp"
+#include "lingbot_depth_estimation/lingbot_depth_estimation.hpp"
 
 namespace depth_estimation_ros{
     class DepthEstimationNode : public rclcpp::Node
@@ -36,6 +38,7 @@ namespace depth_estimation_ros{
         {
             MODEL_TYPE_MONO,
             MODEL_TYPE_STEREO_DISPARITY,
+            MODEL_TYPE_LINGBOT,
         };
 
         void initialize();
@@ -43,9 +46,14 @@ namespace depth_estimation_ros{
         void stereo_image_callback(
             const sensor_msgs::msg::Image::SharedPtr, const sensor_msgs::msg::CameraInfo::SharedPtr,
             const sensor_msgs::msg::Image::SharedPtr, const sensor_msgs::msg::CameraInfo::SharedPtr);
+        void lingbot_image_callback(
+            const sensor_msgs::msg::Image::ConstSharedPtr,
+            const sensor_msgs::msg::Image::ConstSharedPtr);
+        void lingbot_camera_info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr);
 
         std::unique_ptr<depth_estimation_ros::AbcMonoDepthEstimation> mono_depth_;
         std::unique_ptr<depth_estimation_ros::AbcStereoDepthEstimation> stereo_depth_;
+        std::unique_ptr<depth_estimation_ros::AbcLingbotDepthEstimation> lingbot_depth_;
 
         rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_mono_image_;
 
@@ -68,6 +76,18 @@ namespace depth_estimation_ros{
         std::shared_ptr<ApproximateSync> approximate_sync_;
         std::shared_ptr<ApproximateEpsilonSync> approximate_epsilon_sync_;
 
+        message_filters::Subscriber<sensor_msgs::msg::Image> sub_lingbot_rgb_, sub_lingbot_depth_;
+        using RgbdExactPolicy = message_filters::sync_policies::ExactTime<
+            sensor_msgs::msg::Image, sensor_msgs::msg::Image>;
+        using RgbdApproximatePolicy = message_filters::sync_policies::ApproximateTime<
+            sensor_msgs::msg::Image, sensor_msgs::msg::Image>;
+        using RgbdExactSync = message_filters::Synchronizer<RgbdExactPolicy>;
+        using RgbdApproximateSync = message_filters::Synchronizer<RgbdApproximatePolicy>;
+        std::shared_ptr<RgbdExactSync> rgbd_exact_sync_;
+        std::shared_ptr<RgbdApproximateSync> rgbd_approximate_sync_;
+        rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr sub_lingbot_camera_info_;
+        sensor_msgs::msg::CameraInfo::SharedPtr lingbot_camera_info_;
+
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_depth_image_;
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_colored_depth_image_;
         rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pcl2_;
@@ -85,6 +105,7 @@ namespace depth_estimation_ros{
         double depth_offset_ = 0.0;
         double max_depth_meter_ = 20.0;
         double min_depth_meter_ = 0.0;
+        double lingbot_input_depth_scale_ = 0.001;
 
     };
 }

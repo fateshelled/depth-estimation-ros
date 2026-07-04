@@ -18,6 +18,7 @@
   <depend>std_msgs</depend>
   <depend>stereo_msgs</depend>
   <depend>message_filters</depend>
+  <depend>lingbot_depth_estimation</depend>
   <depend>mono_depth_estimation</depend>
   <depend>stereo_depth_estimation</depend>
 

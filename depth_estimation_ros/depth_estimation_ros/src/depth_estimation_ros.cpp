@@ -29,17 +29,38 @@ namespace depth_estimation_ros
         const auto swap_r_b = this->declare_parameter("model_swap_r_b", false);
 
         this->baseline_meter_ = this->declare_parameter("stereo_baseline_meter", 0.05);
-        this->depth_scale_ = this->declare_parameter("depth_scale", 0.5);
+        this->depth_scale_ = this->declare_parameter("depth_scale", 0.001);
         this->depth_offset_ = this->declare_parameter("depth_offset", 0.0);
         this->max_depth_meter_ = this->declare_parameter("max_depth_meter", 20.0);
         this->min_depth_meter_ = this->declare_parameter("min_depth_meter", 0.0);
+        this->lingbot_input_depth_scale_ = this->declare_parameter(
+            "lingbot.input_depth_scale", 0.001);
+        if (this->depth_scale_ <= 0.0 || this->lingbot_input_depth_scale_ <= 0.0)
+        {
+            throw std::invalid_argument("depth scales must be greater than zero");
+        }
 
         this->publish_point_cloud2_ = this->declare_parameter("publish_point_cloud2", true);
         this->publish_depth_image_ = this->declare_parameter("publish_depth_image", false);
         this->publish_colored_depth_image_ = this->declare_parameter("publish_colored_depth_image", true);
         this->imshow_ = this->declare_parameter("imshow", false);
 
-        if (model_type == "mono")
+        if (model_type == "lingbot")
+        {
+            if (backend != "tensorrt")
+            {
+                RCLCPP_ERROR(this->get_logger(), "LingBot-Depth only supports the TensorRT backend");
+                rclcpp::shutdown();
+                return;
+            }
+            RCLCPP_INFO(this->get_logger(), "Loading LingBot-Depth TensorRT engine");
+            this->lingbot_depth_ = std::make_unique<LingbotDepthEstimationTensorRT>(
+                model_path, tensorrt_device);
+            RCLCPP_INFO(
+                this->get_logger(), "LingBot-Depth engine loaded (%dx%d)",
+                this->lingbot_depth_->input_width(), this->lingbot_depth_->input_height());
+        }
+        else if (model_type == "mono")
         {
             if (backend == "tensorrt")
             {
@@ -83,7 +104,41 @@ namespace depth_estimation_ros
 
         }
 
-        if (model_type == "mono")
+        if (model_type == "lingbot")
+        {
+            const auto queue_size = this->declare_parameter("message_filter.queue_size", 5);
+            const auto approximate_sync = this->declare_parameter(
+                "message_filter.approximate_sync", false);
+            const auto rgb_topic = this->declare_parameter(
+                "lingbot.rgb_topic", "/camera/camera/color/image_raw");
+            const auto depth_topic = this->declare_parameter(
+                "lingbot.depth_topic", "/camera/camera/aligned_depth_to_color/image_raw");
+            const auto camera_info_topic = this->declare_parameter(
+                "lingbot.camera_info_topic", "/camera/camera/color/camera_info");
+
+            sub_lingbot_rgb_.subscribe(this, rgb_topic, rmw_qos_profile_sensor_data);
+            sub_lingbot_depth_.subscribe(this, depth_topic, rmw_qos_profile_sensor_data);
+            if (approximate_sync)
+            {
+                rgbd_approximate_sync_ = std::make_shared<RgbdApproximateSync>(
+                    RgbdApproximatePolicy(queue_size), sub_lingbot_rgb_, sub_lingbot_depth_);
+                rgbd_approximate_sync_->registerCallback(
+                    &DepthEstimationNode::lingbot_image_callback, this);
+            }
+            else
+            {
+                rgbd_exact_sync_ = std::make_shared<RgbdExactSync>(
+                    RgbdExactPolicy(queue_size), sub_lingbot_rgb_, sub_lingbot_depth_);
+                rgbd_exact_sync_->registerCallback(
+                    &DepthEstimationNode::lingbot_image_callback, this);
+            }
+            sub_lingbot_camera_info_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
+                camera_info_topic, rclcpp::SensorDataQoS(),
+                std::bind(
+                    &DepthEstimationNode::lingbot_camera_info_callback, this,
+                    std::placeholders::_1));
+        }
+        else if (model_type == "mono")
         {
             this->sub_mono_image_ = this->create_subscription<sensor_msgs::msg::Image>(
                 "image_raw",
@@ -195,6 +250,114 @@ namespace depth_estimation_ros
                 cv::imshow(window_name_, colored);
                 auto key = cv::waitKey(1);
                 if (key == 27)
+                {
+                    rclcpp::shutdown();
+                }
+            }
+        }
+    }
+
+    void DepthEstimationNode::lingbot_camera_info_callback(
+            const sensor_msgs::msg::CameraInfo::SharedPtr camera_info)
+    {
+        this->lingbot_camera_info_ = camera_info;
+    }
+
+    void DepthEstimationNode::lingbot_image_callback(
+            const sensor_msgs::msg::Image::ConstSharedPtr rgb_ptr,
+            const sensor_msgs::msg::Image::ConstSharedPtr depth_ptr)
+    {
+        cv::Mat color;
+        cv::Mat depth_m;
+        try
+        {
+            color = cv_bridge::toCvCopy(*rgb_ptr, sensor_msgs::image_encodings::BGR8)->image;
+            if (depth_ptr->encoding == sensor_msgs::image_encodings::TYPE_16UC1 ||
+                depth_ptr->encoding == sensor_msgs::image_encodings::MONO16)
+            {
+                const cv::Mat depth_units = cv_bridge::toCvCopy(
+                    *depth_ptr, sensor_msgs::image_encodings::TYPE_16UC1)->image;
+                depth_units.convertTo(depth_m, CV_32FC1, this->lingbot_input_depth_scale_);
+            }
+            else if (depth_ptr->encoding == sensor_msgs::image_encodings::TYPE_32FC1)
+            {
+                depth_m = cv_bridge::toCvCopy(
+                    *depth_ptr, sensor_msgs::image_encodings::TYPE_32FC1)->image;
+            }
+            else
+            {
+                RCLCPP_ERROR_THROTTLE(
+                    this->get_logger(), *this->get_clock(), 5000,
+                    "Unsupported LingBot depth encoding: %s", depth_ptr->encoding.c_str());
+                return;
+            }
+        }
+        catch (const cv_bridge::Exception & error)
+        {
+            RCLCPP_ERROR_THROTTLE(
+                this->get_logger(), *this->get_clock(), 5000,
+                "RGB-D conversion failed: %s", error.what());
+            return;
+        }
+
+        const auto start = std::chrono::steady_clock::now();
+        cv::Mat refined;
+        try
+        {
+            refined = this->lingbot_depth_->inference(color, depth_m);
+        }
+        catch (const std::exception & error)
+        {
+            RCLCPP_ERROR_THROTTLE(
+                this->get_logger(), *this->get_clock(), 5000,
+                "LingBot-Depth inference failed: %s", error.what());
+            return;
+        }
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - start);
+        RCLCPP_INFO(this->get_logger(), "LingBot-Depth inference time: %5ld us", elapsed.count());
+
+        cv::patchNaNs(refined, 0.0);
+        refined.setTo(0.0, refined < this->min_depth_meter_);
+        refined.setTo(0.0, refined > this->max_depth_meter_);
+
+        if (this->publish_depth_image_)
+        {
+            cv::Mat depth_u16;
+            refined.convertTo(
+                depth_u16, CV_16UC1, 1.0 / this->depth_scale_);
+            auto message = cv_bridge::CvImage(
+                rgb_ptr->header, sensor_msgs::image_encodings::TYPE_16UC1,
+                depth_u16).toImageMsg();
+            this->pub_depth_image_->publish(*message);
+        }
+
+        if (this->publish_point_cloud2_ && this->lingbot_camera_info_)
+        {
+            const auto & k = this->lingbot_camera_info_->k;
+            auto cloud = depth_image_to_pc_msg<float>(
+                refined, rgb_ptr->header,
+                static_cast<float>(k[0]), static_cast<float>(k[4]),
+                static_cast<float>(k[2]), static_cast<float>(k[5]), 1.0F);
+            this->pub_pcl2_->publish(*cloud);
+        }
+
+        if (this->publish_colored_depth_image_ || this->imshow_)
+        {
+            cv::Mat colored;
+            cv::normalize(refined, colored, 0, 255, cv::NORM_MINMAX, CV_8U);
+            cv::applyColorMap(colored, colored, cv::COLORMAP_JET);
+            if (this->publish_colored_depth_image_)
+            {
+                auto message = cv_bridge::CvImage(
+                    rgb_ptr->header, sensor_msgs::image_encodings::BGR8,
+                    colored).toImageMsg();
+                this->pub_colored_depth_image_->publish(*message);
+            }
+            if (this->imshow_)
+            {
+                cv::imshow(window_name_, colored);
+                if (cv::waitKey(1) == 27)
                 {
                     rclcpp::shutdown();
                 }
