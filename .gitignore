@@ -34,3 +34,7 @@
 .vscode/*
 *.onnx
 *.engine
+
+build
+install
+log
