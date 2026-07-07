@@ -23,20 +23,34 @@ namespace depth_estimation_ros
             float x;
             float y;
             float z;
-            float rgb;
+            uint32_t rgb;
         };
         static_assert(sizeof(PointXYZ) == sizeof(float) * 3);
         static_assert(sizeof(PointXYZRGB) == sizeof(float) * 4);
 
-        inline float pack_bgr_to_rgb_float(const cv::Vec3b & bgr)
+        inline uint32_t pack_bgr_to_rgb(const uint8_t * bgr)
         {
-            const uint32_t rgb =
+            return
                 (static_cast<uint32_t>(bgr[2]) << 16) |
                 (static_cast<uint32_t>(bgr[1]) << 8) |
                 static_cast<uint32_t>(bgr[0]);
-            float packed;
-            std::memcpy(&packed, &rgb, sizeof(packed));
-            return packed;
+        }
+
+        inline void write_xyzrgb(
+            uint8_t * dst, const float x, const float y, const float z, const uint32_t rgb)
+        {
+            std::memcpy(dst, &x, sizeof(float));
+            std::memcpy(dst + sizeof(float), &y, sizeof(float));
+            std::memcpy(dst + sizeof(float) * 2, &z, sizeof(float));
+            std::memcpy(dst + sizeof(float) * 3, &rgb, sizeof(uint32_t));
+        }
+
+        inline void write_xyz(
+            uint8_t * dst, const float x, const float y, const float z)
+        {
+            std::memcpy(dst, &x, sizeof(float));
+            std::memcpy(dst + sizeof(float), &y, sizeof(float));
+            std::memcpy(dst + sizeof(float) * 2, &z, sizeof(float));
         }
     }
 
@@ -102,7 +116,7 @@ namespace depth_estimation_ros
                 for (int y = 0; y < depth_image.rows; ++y)
                 {
                     const auto * depth_row = depth_image.ptr<img_type>(y);
-                    const auto * color_row = color_bgr->ptr<cv::Vec3b>(y);
+                    const auto * color_row = color_bgr->ptr<uint8_t>(y);
                     const float y_factor = y_lut[y];
                     for (int x = 0; x < depth_image.cols; ++x)
                     {
@@ -112,10 +126,10 @@ namespace depth_estimation_ros
                             continue;
                         }
 
-                        const PointXYZRGB point{
-                            d * x_lut[x], d * y_factor, d,
-                            pack_bgr_to_rgb_float(color_row[x])};
-                        std::memcpy(dst, &point, sizeof(PointXYZRGB));
+                        const auto * bgr = color_row + x * 3;
+                        write_xyzrgb(
+                            dst, d * x_lut[x], d * y_factor, d,
+                            pack_bgr_to_rgb(bgr));
                         dst += sizeof(PointXYZRGB);
                         ++valid_points;
                     }
@@ -135,8 +149,7 @@ namespace depth_estimation_ros
                             continue;
                         }
 
-                        const PointXYZ point{d * x_lut[x], d * y_factor, d};
-                        std::memcpy(dst, &point, sizeof(PointXYZ));
+                        write_xyz(dst, d * x_lut[x], d * y_factor, d);
                         dst += sizeof(PointXYZ);
                         ++valid_points;
                     }
@@ -150,7 +163,7 @@ namespace depth_estimation_ros
                 for (int y = 0; y < depth_image.rows; ++y)
                 {
                     const auto * depth_row = depth_image.ptr<img_type>(y);
-                    const auto * color_row = color_bgr->ptr<cv::Vec3b>(y);
+                    const auto * color_row = color_bgr->ptr<uint8_t>(y);
                     const float y_factor = (static_cast<float>(y) - cy) * fy_inv;
                     for (int x = 0; x < depth_image.cols; ++x)
                     {
@@ -160,12 +173,13 @@ namespace depth_estimation_ros
                             continue;
                         }
 
-                        const PointXYZRGB point{
+                        const auto * bgr = color_row + x * 3;
+                        write_xyzrgb(
+                            dst,
                             d * (static_cast<float>(x) - cx) * fx_inv,
                             d * y_factor,
                             d,
-                            pack_bgr_to_rgb_float(color_row[x])};
-                        std::memcpy(dst, &point, sizeof(PointXYZRGB));
+                            pack_bgr_to_rgb(bgr));
                         dst += sizeof(PointXYZRGB);
                         ++valid_points;
                     }
@@ -185,11 +199,11 @@ namespace depth_estimation_ros
                             continue;
                         }
 
-                        const PointXYZ point{
+                        write_xyz(
+                            dst,
                             d * (static_cast<float>(x) - cx) * fx_inv,
                             d * y_factor,
-                            d};
-                        std::memcpy(dst, &point, sizeof(PointXYZ));
+                            d);
                         dst += sizeof(PointXYZ);
                         ++valid_points;
                     }
