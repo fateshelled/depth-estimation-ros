@@ -380,7 +380,7 @@ namespace depth_estimation_ros
             this->update_point_cloud_lut(refined.cols, refined.rows, fx, fy, cx, cy);
             auto cloud = depth_image_to_pc_msg<float>(
                 refined, rgb_ptr->header, fx, fy, cx, cy,
-                this->point_cloud_x_lut_.data(), this->point_cloud_y_lut_.data());
+                this->point_cloud_x_lut_.data(), this->point_cloud_y_lut_.data(), &color);
 
             const auto pc_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - pc_start);
@@ -459,7 +459,7 @@ namespace depth_estimation_ros
             this->update_point_cloud_lut(depth_f32.cols, depth_f32.rows, fx, fy, cx, cy);
             auto pub_pcd = depth_image_to_pc_msg<float>(
                 depth_f32, left_ptr->header, fx, fy, cx, cy,
-                this->point_cloud_x_lut_.data(), this->point_cloud_y_lut_.data());
+                this->point_cloud_x_lut_.data(), this->point_cloud_y_lut_.data(), &left);
 
             const auto pc_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - pc_start);
