@@ -334,11 +334,22 @@ namespace depth_estimation_ros
 
         if (this->publish_point_cloud2_ && this->lingbot_camera_info_)
         {
+            const auto pc_start = std::chrono::steady_clock::now();
+
             const auto & k = this->lingbot_camera_info_->k;
+            const float fx = k[0];
+            const float fy = k[4];
+            const float cx = k[2];
+            const float cy = k[5];
+            const float scale = 1.0f;
             auto cloud = depth_image_to_pc_msg<float>(
-                refined, rgb_ptr->header,
-                static_cast<float>(k[0]), static_cast<float>(k[4]),
-                static_cast<float>(k[2]), static_cast<float>(k[5]), 1.0F);
+                refined, rgb_ptr->header, fx, fy, cx, cy, scale);
+
+            const auto pc_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - pc_start);
+            RCLCPP_INFO(
+                this->get_logger(), "Point cloud conversion time: %5ld us",
+                pc_elapsed.count());
             this->pub_pcl2_->publish(*cloud);
         }
 
@@ -406,7 +417,17 @@ namespace depth_estimation_ros
             const float cx = left_info_ptr->p[2];
             const float cy = left_info_ptr->p[6];
 
-            auto pub_pcd = depth_image_to_pc_msg<float>(depth_f32, left_ptr->header, fx, fy, cx, cy, this->depth_scale_);
+            const auto pc_start = std::chrono::steady_clock::now();
+
+            auto pub_pcd = depth_image_to_pc_msg<float>(
+                depth_f32, left_ptr->header, fx, fy, cx, cy, this->depth_scale_);
+
+            const auto pc_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - pc_start);
+            RCLCPP_INFO(
+                this->get_logger(), "Point cloud conversion time: %5ld us",
+                pc_elapsed.count());
+
             this->pub_pcl2_->publish(*pub_pcd);
         }
 
