@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <chrono>
+#include <vector>
 
 #if __has_include(<cv_bridge/cv_bridge.hpp>)
 #include <cv_bridge/cv_bridge.hpp>
@@ -50,6 +51,7 @@ namespace depth_estimation_ros{
             const sensor_msgs::msg::Image::ConstSharedPtr,
             const sensor_msgs::msg::Image::ConstSharedPtr);
         void lingbot_camera_info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr);
+        void update_point_cloud_lut(int, int, float, float, float, float);
 
         std::unique_ptr<depth_estimation_ros::AbcMonoDepthEstimation> mono_depth_;
         std::unique_ptr<depth_estimation_ros::AbcStereoDepthEstimation> stereo_depth_;
@@ -106,6 +108,15 @@ namespace depth_estimation_ros{
         double max_depth_meter_ = 20.0;
         double min_depth_meter_ = 0.0;
         double lingbot_input_depth_scale_ = 0.001;
+
+        std::vector<float> point_cloud_x_lut_;
+        std::vector<float> point_cloud_y_lut_;
+        int point_cloud_lut_width_ = 0;
+        int point_cloud_lut_height_ = 0;
+        float point_cloud_lut_fx_ = 0.0f;
+        float point_cloud_lut_fy_ = 0.0f;
+        float point_cloud_lut_cx_ = 0.0f;
+        float point_cloud_lut_cy_ = 0.0f;
 
     };
 }

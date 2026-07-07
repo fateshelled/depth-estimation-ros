@@ -263,6 +263,42 @@ namespace depth_estimation_ros
         this->lingbot_camera_info_ = camera_info;
     }
 
+    void DepthEstimationNode::update_point_cloud_lut(
+            const int width, const int height,
+            const float fx, const float fy, const float cx, const float cy)
+    {
+        if (width == this->point_cloud_lut_width_ &&
+            height == this->point_cloud_lut_height_ &&
+            fx == this->point_cloud_lut_fx_ &&
+            fy == this->point_cloud_lut_fy_ &&
+            cx == this->point_cloud_lut_cx_ &&
+            cy == this->point_cloud_lut_cy_)
+        {
+            return;
+        }
+
+        this->point_cloud_x_lut_.resize(width);
+        this->point_cloud_y_lut_.resize(height);
+
+        const float fx_inv = 1.0f / fx;
+        const float fy_inv = 1.0f / fy;
+        for (int x = 0; x < width; ++x)
+        {
+            this->point_cloud_x_lut_[x] = (static_cast<float>(x) - cx) * fx_inv;
+        }
+        for (int y = 0; y < height; ++y)
+        {
+            this->point_cloud_y_lut_[y] = (static_cast<float>(y) - cy) * fy_inv;
+        }
+
+        this->point_cloud_lut_width_ = width;
+        this->point_cloud_lut_height_ = height;
+        this->point_cloud_lut_fx_ = fx;
+        this->point_cloud_lut_fy_ = fy;
+        this->point_cloud_lut_cx_ = cx;
+        this->point_cloud_lut_cy_ = cy;
+    }
+
     void DepthEstimationNode::lingbot_image_callback(
             const sensor_msgs::msg::Image::ConstSharedPtr rgb_ptr,
             const sensor_msgs::msg::Image::ConstSharedPtr depth_ptr)
@@ -341,9 +377,10 @@ namespace depth_estimation_ros
             const float fy = k[4];
             const float cx = k[2];
             const float cy = k[5];
-            const float scale = 1.0f;
+            this->update_point_cloud_lut(refined.cols, refined.rows, fx, fy, cx, cy);
             auto cloud = depth_image_to_pc_msg<float>(
-                refined, rgb_ptr->header, fx, fy, cx, cy, scale);
+                refined, rgb_ptr->header, fx, fy, cx, cy,
+                this->point_cloud_x_lut_.data(), this->point_cloud_y_lut_.data());
 
             const auto pc_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - pc_start);
@@ -419,8 +456,10 @@ namespace depth_estimation_ros
 
             const auto pc_start = std::chrono::steady_clock::now();
 
+            this->update_point_cloud_lut(depth_f32.cols, depth_f32.rows, fx, fy, cx, cy);
             auto pub_pcd = depth_image_to_pc_msg<float>(
-                depth_f32, left_ptr->header, fx, fy, cx, cy, this->depth_scale_);
+                depth_f32, left_ptr->header, fx, fy, cx, cy,
+                this->point_cloud_x_lut_.data(), this->point_cloud_y_lut_.data());
 
             const auto pc_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - pc_start);

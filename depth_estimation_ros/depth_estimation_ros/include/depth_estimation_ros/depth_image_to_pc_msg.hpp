@@ -1,6 +1,9 @@
 #pragma once
 
-#include <vector>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+
 #include <opencv2/core.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -9,18 +12,20 @@ namespace depth_estimation_ros
 {
     namespace
     {
-        #pragma pack(1)
         struct PointXYZ
         {
             float x;
             float y;
             float z;
         };
+        static_assert(sizeof(PointXYZ) == sizeof(float) * 3);
     }
-    template <class img_type=uint16_t>
+
+    template <class img_type=float>
     inline sensor_msgs::msg::PointCloud2::SharedPtr depth_image_to_pc_msg(
         const cv::Mat &depth_image, const std_msgs::msg::Header& header,
-        float fx, float fy, float cx, float cy, float scale
+        float fx, float fy, float cx, float cy,
+        const float * x_lut = nullptr, const float * y_lut = nullptr
     )
     {
         sensor_msgs::msg::PointCloud2::SharedPtr msg(new sensor_msgs::msg::PointCloud2);
@@ -46,32 +51,66 @@ namespace depth_estimation_ros
         msg->width = 0;
         msg->point_step = sizeof(float) * 3;
         msg->row_step = 0;
+        msg->is_bigendian = false;
+        msg->is_dense = true;
 
-        float fx_inv = 1.0 / fx;
-        float fy_inv = 1.0 / fy;
-        std::vector<PointXYZ> tmp_cloud(depth_image.cols * depth_image.rows);
-        depth_image.forEach<img_type>(
-            [&depth_image, &tmp_cloud, &cx, &cy, &fx_inv, &fy_inv, &scale]
-            (const img_type &depth, const int * position) -> void {
-                const auto d = static_cast<float>(depth)* scale;
-                const int h = position[0];
-                const int w = position[1];
-                const size_t pos = h * depth_image.cols + w;
-                tmp_cloud[pos].x = d * ((float)w - cx) * fx_inv;
-                tmp_cloud[pos].y = d * ((float)h - cy) * fy_inv;
-                tmp_cloud[pos].z = d;
-            }
-        );
+        const auto max_points = static_cast<size_t>(depth_image.cols) *
+            static_cast<size_t>(depth_image.rows);
+        msg->data.resize(max_points * sizeof(PointXYZ));
 
-        msg->data.reserve((sizeof(float) / sizeof(uint8_t)) * tmp_cloud.size());
-        auto ptr = reinterpret_cast<uint8_t *>(tmp_cloud.data());
-        for (size_t i = 0; i < tmp_cloud.size(); ++i)
+        const float fx_inv = 1.0f / fx;
+        const float fy_inv = 1.0f / fy;
+        auto * dst = msg->data.data();
+        size_t valid_points = 0;
+
+        if (x_lut != nullptr && y_lut != nullptr)
         {
-            if (tmp_cloud[i].z <= 0.0f) continue;
-            auto data = ptr + (i * sizeof(PointXYZ));
-            msg->data.insert(msg->data.end(), data, data + sizeof(PointXYZ));
-            msg->width += 1;
+            for (int y = 0; y < depth_image.rows; ++y)
+            {
+                const auto * row = depth_image.ptr<img_type>(y);
+                const float y_factor = y_lut[y];
+                for (int x = 0; x < depth_image.cols; ++x)
+                {
+                    const float d = static_cast<float>(row[x]);
+                    if (d <= 0.0f || !std::isfinite(d))
+                    {
+                        continue;
+                    }
+
+                    const PointXYZ point{d * x_lut[x], d * y_factor, d};
+                    std::memcpy(dst, &point, sizeof(PointXYZ));
+                    dst += sizeof(PointXYZ);
+                    ++valid_points;
+                }
+            }
         }
+        else
+        {
+            for (int y = 0; y < depth_image.rows; ++y)
+            {
+                const auto * row = depth_image.ptr<img_type>(y);
+                const float y_factor = (static_cast<float>(y) - cy) * fy_inv;
+                for (int x = 0; x < depth_image.cols; ++x)
+                {
+                    const float d = static_cast<float>(row[x]);
+                    if (d <= 0.0f || !std::isfinite(d))
+                    {
+                        continue;
+                    }
+
+                    const PointXYZ point{
+                        d * (static_cast<float>(x) - cx) * fx_inv,
+                        d * y_factor,
+                        d};
+                    std::memcpy(dst, &point, sizeof(PointXYZ));
+                    dst += sizeof(PointXYZ);
+                    ++valid_points;
+                }
+            }
+        }
+
+        msg->width = static_cast<uint32_t>(valid_points);
+        msg->data.resize(valid_points * sizeof(PointXYZ));
         msg->row_step = msg->width * msg->point_step;
 
         return msg;
