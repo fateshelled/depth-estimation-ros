@@ -154,7 +154,7 @@ namespace depth_estimation_ros
 
             sub_left_image_.subscribe(this, "/camera/camera/infra1/image_rect_raw");
             sub_right_image_.subscribe(this, "/camera/camera/infra2/image_rect_raw");
-            sub_left_info_.subscribe(this, "/camera/camera/infra2/camera_info");
+            sub_left_info_.subscribe(this, "/camera/camera/infra1/camera_info");
             sub_right_info_.subscribe(this, "/camera/camera/infra2/camera_info");
 
             // Synchronize callbacks
