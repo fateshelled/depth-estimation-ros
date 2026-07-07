@@ -39,7 +39,9 @@ std::unique_ptr<T> make_trt_unique(T * pointer, const char * what)
 void float_to_half(const std::vector<float> & source, std::vector<std::uint16_t> & destination)
 {
   static_assert(sizeof(__half) == sizeof(std::uint16_t));
-  destination.resize(source.size());
+  if (destination.size() != source.size()) {
+    destination.resize(source.size());
+  }
   for (std::size_t i = 0; i < source.size(); ++i) {
     const __half value = __float2half(source[i]);
     const __half_raw raw = value;
@@ -171,6 +173,15 @@ LingbotDepthEstimationTensorRT::LingbotDepthEstimationTensorRT(
   image_float_.resize(image_.elements);
   depth_float_.resize(depth_.elements);
   output_float_.resize(output_.elements);
+  if (image_.dtype == nvinfer1::DataType::kHALF) {
+    image_half_.resize(image_.elements);
+  }
+  if (depth_.dtype == nvinfer1::DataType::kHALF) {
+    depth_half_.resize(depth_.elements);
+  }
+  if (output_.dtype == nvinfer1::DataType::kHALF) {
+    output_half_.resize(output_.elements);
+  }
 }
 
 LingbotDepthEstimationTensorRT::~LingbotDepthEstimationTensorRT()
@@ -237,16 +248,21 @@ cv::Mat LingbotDepthEstimationTensorRT::inference(
   }
 
   encode_image(color_bgr);
-  encode_depth(depth_m);
   const void * image_host = image_float_.data();
-  const void * depth_host = depth_float_.data();
+  const void * depth_host = nullptr;
   if (image_.dtype == nvinfer1::DataType::kHALF) {
     float_to_half(image_float_, image_half_);
     image_host = image_half_.data();
   }
   if (depth_.dtype == nvinfer1::DataType::kHALF) {
+    encode_depth(depth_m);
     float_to_half(depth_float_, depth_half_);
     depth_host = depth_half_.data();
+  } else if (depth_m.isContinuous()) {
+    depth_host = depth_m.ptr<float>();
+  } else {
+    encode_depth(depth_m);
+    depth_host = depth_float_.data();
   }
 
   check_cuda(cudaMemcpyAsync(
@@ -260,7 +276,6 @@ cv::Mat LingbotDepthEstimationTensorRT::inference(
   }
   void * output_host = output_float_.data();
   if (output_.dtype == nvinfer1::DataType::kHALF) {
-    output_half_.resize(output_.elements);
     output_host = output_half_.data();
   }
   check_cuda(cudaMemcpyAsync(

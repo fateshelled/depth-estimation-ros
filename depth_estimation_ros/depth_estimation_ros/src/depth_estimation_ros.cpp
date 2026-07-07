@@ -305,20 +305,25 @@ namespace depth_estimation_ros
     {
         cv::Mat color;
         cv::Mat depth_m;
+        cv_bridge::CvImageConstPtr color_cv;
+        cv_bridge::CvImageConstPtr depth_cv;
         try
         {
-            color = cv_bridge::toCvCopy(*rgb_ptr, sensor_msgs::image_encodings::BGR8)->image;
+            color_cv = cv_bridge::toCvShare(rgb_ptr, sensor_msgs::image_encodings::BGR8);
+            color = color_cv->image;
             if (depth_ptr->encoding == sensor_msgs::image_encodings::TYPE_16UC1 ||
                 depth_ptr->encoding == sensor_msgs::image_encodings::MONO16)
             {
-                const cv::Mat depth_units = cv_bridge::toCvCopy(
-                    *depth_ptr, sensor_msgs::image_encodings::TYPE_16UC1)->image;
+                depth_cv = cv_bridge::toCvShare(
+                    depth_ptr, sensor_msgs::image_encodings::TYPE_16UC1);
+                const cv::Mat depth_units = depth_cv->image;
                 depth_units.convertTo(depth_m, CV_32FC1, this->lingbot_input_depth_scale_);
             }
             else if (depth_ptr->encoding == sensor_msgs::image_encodings::TYPE_32FC1)
             {
-                depth_m = cv_bridge::toCvCopy(
-                    *depth_ptr, sensor_msgs::image_encodings::TYPE_32FC1)->image;
+                depth_cv = cv_bridge::toCvShare(
+                    depth_ptr, sensor_msgs::image_encodings::TYPE_32FC1);
+                depth_m = depth_cv->image;
             }
             else
             {
