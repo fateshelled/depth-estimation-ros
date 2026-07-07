@@ -6,13 +6,13 @@
 
 ## Support Model
 
-### Mono Depth
+### Mono Depth Model
 
 - Depth-Anything-V2
   - Reference of model converting to TensorRT Engine
     - <https://github.com/spacewalk01/depth-anything-tensorrt>
 
-### Stereo
+### Stereo Depth Model
 
 - CREStereo
   - ONNX model download
@@ -21,7 +21,7 @@
   - ONNX model download
     - <https://github.com/PINTO0309/PINTO_model_zoo/tree/main/338_Fast-ACVNet>
 
-### RGB-D Refinement
+### RGB-D Refinement Model
 
 - LingBot-Depth (fixed-shape TensorRT engine)
   - Reference of model converting to TensorRT Engine
